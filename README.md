@@ -41,3 +41,22 @@ Both configurations use a serial speed of 2400 baud with even parity (`HEATPUMP_
 You can adjust these defaults by defining the macros above in `platformio.ini` (using `build_flags = -DHEATPUMP_SERIAL_RX_PIN=<pin> ...`) or by editing `src/main.cpp` directly.
 
 On boot the firmware connects to the heat pump, applies a set of initial settings (power on, HEAT mode, 22 °C, AUTO fan), and then periodically synchronises with the unit. Status, settings changes, and room temperature updates are logged to the USB serial console to provide visibility into the connection.
+
+### Wi-Fi and Matter support
+
+The sketch now connects to your Wi-Fi network to expose a stubbed Matter bridge that periodically reports its health over the serial console. Configure the Wi-Fi credentials at build time via the following macros (for example inside `platformio.ini`):
+
+```ini
+build_flags =
+  -DWIFI_SSID=\"your-ssid\"
+  -DWIFI_PASSWORD=\"super_secret\"
+```
+
+Additional tuning knobs are available:
+
+| Macro | Purpose | Default |
+|-------|---------|---------|
+| `WIFI_CONNECT_TIMEOUT_MS` | Time (in milliseconds) to wait for the initial Wi-Fi connection attempt. | `15000` |
+| `WIFI_RECONNECT_INTERVAL_MS` | Minimum delay between automatic reconnect attempts once disconnected. | `10000` |
+
+Once Wi-Fi is connected the Matter bridge simulator logs a heartbeat every five seconds to confirm that the ESP32 is ready for commissioning commands. The heartbeat currently serves as a placeholder for future integration with the official ESP Matter SDK while still providing a visible indicator that wireless connectivity is active.
