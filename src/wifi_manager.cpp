@@ -1,0 +1,31 @@
+#include "wifi_manager.h"
+#include "build_defaults.generated.h"
+#include <WiFi.h>
+
+void wifiConnect(const Settings &s) {
+    Serial.printf("[WiFi] Connecting to '%s'\n", s.wifiSsid.c_str());
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(s.deviceName.c_str());
+    WiFi.begin(s.wifiSsid.c_str(), s.wifiPass.c_str());
+
+    const unsigned long timeout  = (unsigned long)BUILD_DEFAULT_WIFI_CONNECT_TIMEOUT_SECONDS * 1000UL;
+    const unsigned long deadline = millis() + timeout;
+    while (WiFi.status() != WL_CONNECTED && millis() < deadline) {
+        delay(200);
+        Serial.print('.');
+    }
+    Serial.println();
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf("[WiFi] Connected. IP: %s\n", WiFi.localIP().toString().c_str());
+        return;
+    }
+
+    Serial.println("[WiFi] STA failed.");
+    if (!s.apEnabled) return;
+
+    Serial.printf("[WiFi] Starting AP '%s'\n", s.apSsid.c_str());
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(s.apSsid.c_str());
+    Serial.printf("[WiFi] AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+}

@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ESP-AC Control</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: #f2f2f2; color: #1a1a1a; min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+  }
+  #root { max-width: 480px; margin: 0 auto; padding: 4px 10px; }
+  .app-header { display: flex; align-items: center; gap: 4px; padding: 3px 0 3px; margin-bottom: 2px; }
+  .app-header-title { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #1a1a1a; }
+  .app-header-sub   { font-size: 11px; color: #8ea0b0; font-weight: 400; }
+  @keyframes pulseGreen {
+    0%,100% { opacity:1; box-shadow:0 0 0 0 #22c55e55; }
+    50%      { opacity:.7; box-shadow:0 0 0 4px #22c55e22; }
+  }
+  .serial-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; background:#22c55e; animation:pulseGreen 1.8s ease-in-out infinite; }
+  .serial-dot.offline { background:#ef4444; animation:none; }
+  .status-card { background:#fff; border-radius:8px; border:1px solid #e4e4e4; padding:10px 14px; margin-bottom:4px; }
+  .status-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+  .status-item { display:flex; flex-direction:column; gap:2px; }
+  .status-label { font-size:10px; color:#8ea0b0; text-transform:uppercase; letter-spacing:.06em; }
+  .status-value { font-size:13px; font-weight:500; color:#1a1a1a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .wifi-bars { display:inline-flex; align-items:flex-end; gap:2px; height:13px; }
+  .wifi-bars span { width:3px; background:#d0d0d0; border-radius:1px; display:block; transition:background .3s; }
+  .wifi-bars span.lit { background:#1a1a1a; }
+  .matter-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .matter-dot.paired   { background:#22c55e; }
+  .matter-dot.unpaired { background:#d1d5db; }
+  .tabs { display:flex; gap:6px; margin-bottom:4px; }
+  .tab-btn {
+    flex:1; padding:4px 6px; border-radius:8px; border:1px solid #e4e4e4;
+    background:#fff; font-size:14px; font-weight:600; color:#777;
+    cursor:pointer; transition:all .15s; outline:none; font-family:Arial,sans-serif; height:34px;
+  }
+  .tab-btn:hover { border-color:#ccc; color:#333; }
+  .tab-btn.active { background:#0077b6; color:#fff; border-color:#0077b6; }
+  .card { background:#fff; border-radius:8px; border:1px solid #e4e4e4; padding:20px 16px; }
+  .card.logs-card { padding:0; overflow:hidden; }
+  .ac-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f0f0f0; }
+  .ac-row:last-child { border-bottom:none; }
+  .ac-label { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#8ea0b0; }
+  .power-toggle { width:52px; height:28px; border-radius:14px; border:none; cursor:pointer; position:relative; transition:background .2s; outline:none; flex-shrink:0; }
+  .power-toggle.on  { background:#0077b6; }
+  .power-toggle.off { background:#d1d5db; }
+  .power-toggle::after { content:''; position:absolute; top:3px; width:22px; height:22px; border-radius:50%; background:#fff; transition:left .2s; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+  .power-toggle.on::after  { left:27px; }
+  .power-toggle.off::after { left:3px; }
+  .temp-control { display:flex; align-items:center; gap:16px; }
+  .temp-btn { width:36px; height:36px; border-radius:50%; border:1px solid #e4e4e4; background:#fff; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#1a1a1a; transition:all .15s; outline:none; flex-shrink:0; }
+  .temp-btn:hover:not(:disabled) { background:#f5f5f5; border-color:#ccc; }
+  .temp-btn:disabled { opacity:.3; cursor:not-allowed; }
+  .temp-value { font-size:26px; font-weight:600; letter-spacing:-.02em; min-width:56px; text-align:center; }
+  .temp-value span { font-size:15px; font-weight:400; color:#999; margin-left:2px; }
+  .icon-grid { display:flex; gap:6px; flex-wrap:wrap; width:100%; }
+  .icon-btn { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 4px 8px; border-radius:8px; border:1px solid #e8e8e8; background:#fafafa; cursor:pointer; transition:all .15s; outline:none; }
+  .icon-btn:hover { border-color:#bbb; background:#f5f5f5; }
+  .icon-btn.active { background:#0077b6; border-color:#0077b6; }
+  .icon-btn .icon-label { font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:#666; }
+  .icon-btn.active .icon-label { color:#fff; }
+  .icon-btn.active svg { filter:invert(1); }
+  .dir-grid { display:flex; gap:5px; width:100%; }
+  .dir-btn { flex:1; padding:10px 0; border-radius:8px; border:1px solid #e8e8e8; background:#fafafa; cursor:pointer; transition:all .15s; outline:none; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .dir-btn:hover { border-color:#bbb; }
+  .dir-btn.active { background:#0077b6; border-color:#0077b6; }
+  .dir-btn .dir-label { font-size:10px; font-weight:600; color:#666; letter-spacing:.03em; text-transform:uppercase; }
+  .dir-btn.active .dir-label { color:#fff; }
+  .dir-btn.active svg { filter:invert(1); }
+  .settings-section { margin-bottom:20px; }
+  .settings-section:last-of-type { margin-bottom:0; }
+  .section-heading { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#8ea0b0; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid #f0f0f0; display:flex; align-items:center; justify-content:space-between; }
+  .field { display:flex; flex-direction:column; gap:5px; margin-bottom:10px; }
+  .field:last-child { margin-bottom:0; }
+  .field label { font-size:12px; font-weight:500; color:#666; }
+  .field input[type="text"],.field input[type="password"],.field input[type="number"] { width:100%; padding:9px 11px; border-radius:8px; border:1px solid #e4e4e4; font-size:13px; outline:none; font-family:inherit; color:#1a1a1a; background:#fafafa; transition:border-color .15s; }
+  .field input:focus { border-color:#999; background:#fff; }
+  .field-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .matter-box { display:flex; flex-direction:column; align-items:center; gap:12px; padding:16px; background:#fafafa; border-radius:10px; border:1px solid #ebebeb; }
+  .qr-placeholder { width:120px; height:120px; background:#fff; border:1px solid #e4e4e4; border-radius:6px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px; }
+  .qr-placeholder svg { opacity:.15; }
+  .qr-placeholder span { font-size:10px; color:#bbb; letter-spacing:.05em; text-transform:uppercase; }
+  .pairing-hint { font-size:11px; color:#aaa; text-align:center; }
+  .btn-save { width:100%; margin-top:20px; padding:12px; border-radius:10px; background:#0077b6; color:#fff; border:none; font-size:14px; font-weight:600; cursor:pointer; transition:opacity .15s; outline:none; }
+  .btn-save:hover { opacity:.85; }
+  .btn-save:disabled { opacity:.4; cursor:not-allowed; }
+  .btn-reset { width:100%; margin-top:12px; padding:12px; border-radius:10px; background:#fff; color:#dc2626; border:1px solid #fecaca; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; outline:none; }
+  .btn-reset:hover { background:#fef2f2; }
+  .small-btn { padding:3px 10px; border-radius:5px; font-size:11px; font-weight:600; cursor:pointer; outline:none; transition:all .15s; letter-spacing:.02em; text-transform:uppercase; display:inline-flex; align-items:center; gap:5px; }
+  .api-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); padding:8px 18px; border-radius:20px; font-size:13px; font-weight:500; display:flex; align-items:center; gap:7px; z-index:100; animation:toastIn .2s ease; box-shadow:0 4px 16px rgba(0,0,0,.12); pointer-events:none; }
+  .api-toast.ok    { background:#0077b6; color:#fff; }
+  .api-toast.error { background:#dc2626; color:#fff; }
+  @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+  .log-toolbar { display:flex; align-items:center; justify-content:space-between; padding:6px; gap:4px; }
+  .log-filters,.log-actions { display:flex; gap:5px; }
+  .log-filter-btn { padding:5px 12px; border-radius:6px; border:1.5px solid #d0dae6; background:#fff; font-size:12px; font-weight:600; cursor:pointer; color:#5a7a96; transition:all .15s; outline:none; }
+  .log-filter-btn.active-all   { background:#0077b6; color:#fff;    border-color:#0077b6; }
+  .log-filter-btn.active-info  { background:#eff8ff; color:#3b82f6; border-color:#3b82f6; }
+  .log-filter-btn.active-warn  { background:#fffbeb; color:#f59e0b; border-color:#f59e0b; }
+  .log-filter-btn.active-error { background:#fff1f2; color:#f43f5e; border-color:#f43f5e; }
+  .log-action-btn { padding:5px 12px; border-radius:6px; border:1.5px solid #d0dae6; background:#fff; font-size:12px; font-weight:600; cursor:pointer; color:#5a7a96; transition:all .15s; outline:none; }
+  .log-action-btn.scroll-on { background:#f0fdf4; color:#16a34a; border-color:#16a34a; }
+  .ws-dot { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:4px; }
+  .ws-dot.connected    { background:#22c55e; }
+  .ws-dot.disconnected { background:#9ca3af; }
+  .log-table-wrap { overflow-y:auto; max-height:440px; border-top:1.5px solid #e0e8f0; background:#fff; }
+  .log-table { width:100%; border-collapse:collapse; font-family:"SF Mono","Fira Code","Consolas",monospace; font-size:12px; }
+  .log-table thead tr { background:#eef3fb; }
+  .log-table thead th { padding:6px 10px; text-align:left; font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#8ea0b0; border-bottom:1.5px solid #dce5ef; position:sticky; top:0; z-index:2; background:#eef3fb; font-family:system-ui,sans-serif; }
+  .log-table tbody tr { border-bottom:1px solid #e8f0f8; }
+  .log-table tbody tr:hover { background:#f5f9ff; }
+  .log-table td { padding:5px 10px; vertical-align:middle; }
+  .log-td-time { color:#7a9ab5; white-space:nowrap; width:76px; }
+  .log-td-level { width:70px; }
+  .log-td-msg { color:#1a2e3b; word-break:break-word; }
+  .log-empty { padding:32px; text-align:center; color:#bbb; font-size:13px; }
+  .log-footer { padding:6px 14px; text-align:right; font-size:11px; color:#8ea0b0; border-top:1px solid #e0e8f0; background:#f4f7fb; font-family:system-ui,sans-serif; }
+  @media(max-width:360px){ .temp-value{font-size:22px} .icon-btn .icon-label{font-size:9px} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ── State ────────────────────────────────────────────────────
+let gSt = { power:false,temp:22,mode:'COOL',fan:'AUTO',vane:'AUTO',roomTemp:0,hpConnected:false,hostname:'esp32-ac',ip:'',wifi:0,location:'',firmware:'?',matterStatus:'not_implemented' };
+let gSettings = {};
+let gLogs = [];
+let gFilter = 'ALL';
+let gAutoScroll = true;
+let gTab = 'ac';
+let gWs = null, gWsDelay = 1000, gWsTimer = null;
+let gToastTimer = null;
+let gSettingsLoaded = false;
+let gRebootConfirm = false, gRebootTimer = null;
+let gMqttEnabled = false;
+let gMatterStatus = { status: 'not_commissioned', pairingCode: '', qrUrl: '' };
+
+const FAN_LABELS = { AUTO:'AUTO', QUIET:'QUIET', '1':'LOW', '2':'MED', '3':'MID', '4':'HIGH' };
+const FAN_ORDER  = ['AUTO','QUIET','1','2','3','4'];
+const MODE_ORDER = ['AUTO','HEAT','COOL','DRY','FAN'];
+const VANE_ORDER = ['AUTO','1','2','3','4','5','SWING'];
+
+// ── SVG Icons ─────────────────────────────────────────────────
+const ICO = {
+  refresh: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>`,
+  auto:    `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>`,
+  heat:    `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="4" fill="#1a1a1a"/><line x1="10" y1="1" x2="10" y2="3.5" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="10" y1="16.5" x2="10" y2="19" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="1" y1="10" x2="3.5" y2="10" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="16.5" y1="10" x2="19" y2="10" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="3.05" y1="3.05" x2="4.82" y2="4.82" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="15.18" y1="15.18" x2="16.95" y2="16.95" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="16.95" y1="3.05" x2="15.18" y2="4.82" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="4.82" y1="15.18" x2="3.05" y2="16.95" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  cool:    `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><line x1="10" y1="2" x2="10" y2="18" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="2" y1="10" x2="18" y2="10" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="4.3" y1="4.3" x2="15.7" y2="15.7" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><line x1="15.7" y1="4.3" x2="4.3" y2="15.7" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="10" r="2" fill="#1a1a1a"/></svg>`,
+  dry:     `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3C10 3 4.5 9 4.5 13a5.5 5.5 0 0 0 11 0C15.5 9 10 3 10 3z" stroke="#1a1a1a" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>`,
+  fan:     `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="1.8" fill="#1a1a1a"/><path d="M10 10 Q14.33 7.5 17 10" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" fill="none"/><path d="M10 10 Q12.5 14.33 10 17" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" fill="none"/><path d="M10 10 Q5.67 12.5 3 10" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" fill="none"/><path d="M10 10 Q7.5 5.67 10 3" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>`,
+  qr:      `<svg width="48" height="48" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="8" height="8" rx="1" stroke="#1a1a1a" stroke-width="1.5"/><rect x="14" y="2" width="8" height="8" rx="1" stroke="#1a1a1a" stroke-width="1.5"/><rect x="2" y="14" width="8" height="8" rx="1" stroke="#1a1a1a" stroke-width="1.5"/><rect x="4" y="4" width="4" height="4" rx=".3" fill="#1a1a1a"/><rect x="16" y="4" width="4" height="4" rx=".3" fill="#1a1a1a"/><rect x="4" y="16" width="4" height="4" rx=".3" fill="#1a1a1a"/><rect x="14" y="14" width="2" height="2" fill="#1a1a1a"/><rect x="18" y="14" width="2" height="2" fill="#1a1a1a"/><rect x="14" y="18" width="2" height="2" fill="#1a1a1a"/><rect x="18" y="18" width="2" height="2" fill="#1a1a1a"/><rect x="16" y="16" width="2" height="2" fill="#1a1a1a"/></svg>`,
+  reboot:  `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,
+  okIcon:  `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="rgba(255,255,255,.2)"/><path d="M3.5 7l2.5 2.5 4.5-4.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  errIcon: `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" fill="rgba(255,255,255,.2)"/><path d="M5 5l4 4M9 5l-4 4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>`
+};
+
+const MODE_ICONS = { AUTO: ICO.auto, HEAT: ICO.heat, COOL: ICO.cool, DRY: ICO.dry, FAN: ICO.fan };
+
+function fanBarsSvg(fanVal) {
+  const counts = { AUTO:0, QUIET:1, '1':1, '2':2, '3':3, '4':4 };
+  const n = counts[fanVal] ?? 1;
+  if (fanVal === 'AUTO') return ICO.refresh;
+  const bars = [1,2,3,4].map(i => {
+    const x = ((i-1)*4.5).toFixed(1), y = (14-i*3.2).toFixed(1), h = (i*3.2).toFixed(1);
+    const fill = i <= n ? '#1a1a1a' : '#d1d5db';
+    return `<rect x="${x}" y="${y}" width="3.2" height="${h}" rx="1" fill="${fill}"/>`;
+  }).join('');
+  return `<svg width="18" height="14" viewBox="0 0 18 14" fill="none">${bars}</svg>`;
+}
+
+function vaneSvg(pos) {
+  if (pos === 'AUTO') return ICO.refresh;
+  const angles = { SWING:0, '1':60, '2':40, '3':20, '4':0, '5':-20 };
+  const rad = ((angles[pos] ?? 0) * Math.PI) / 180;
+  const isSwing = pos === 'SWING';
+  const lines = [0,1,2].map(i => {
+    const y = 3 + i*5, len = 14 - i*1.5;
+    const x2 = (4 + len*Math.cos(rad)).toFixed(2), y2 = (y + len*Math.sin(rad)).toFixed(2);
+    const op = isSwing ? (i===1?1:0.4) : 1;
+    return `<line x1="4" y1="${y}" x2="${x2}" y2="${y2}" stroke="#1a1a1a" stroke-width="1.8" stroke-linecap="round" opacity="${op}"/>`;
+  }).join('');
+  return `<svg width="22" height="16" viewBox="0 0 22 16" fill="none">${lines}</svg>`;
+}
+
+function wifiBarsHtml(dbm) {
+  const s = dbm > -55 ? 4 : dbm > -65 ? 3 : dbm > -75 ? 2 : 1;
+  return '<span class="wifi-bars">' +
+    [1,2,3,4].map(i=>`<span class="${i<=s?'lit':''}" style="height:${i*25}%"></span>`).join('') +
+    '</span>';
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function showToast(msg, type='ok') {
+  clearTimeout(gToastTimer);
+  const el = document.getElementById('toast');
+  const icon = type==='ok' ? ICO.okIcon : ICO.errIcon;
+  el.className = `api-toast ${type}`;
+  el.innerHTML = icon + msg;
+  el.style.display = 'flex';
+  gToastTimer = setTimeout(() => { el.style.display='none'; }, 2200);
+}
+
+// ── Level badge ───────────────────────────────────────────────
+function levelBadge(lvl) {
+  const styles = {
+    info:  'border:1.5px solid #93c5fd;background:#eff8ff;color:#3b82f6',
+    warn:  'border:1.5px solid #fcd34d;background:#fffbeb;color:#d97706',
+    error: 'border:1.5px solid #fca5a5;background:#fff1f2;color:#ef4444',
+    debug: 'border:1.5px solid #86efac;background:#f0fdf4;color:#22c55e'
+  };
+  const s = styles[lvl] || 'border:1.5px solid #ccc;background:#f5f5f5;color:#666';
+  return `<span style="display:inline-block;padding:2px 7px;border-radius:5px;${s};font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-family:system-ui,sans-serif;min-width:46px;text-align:center">${lvl}</span>`;
+}
+
+// ── API helpers ───────────────────────────────────────────────
+async function apiPost(path, body) {
+  const r = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  return r.json();
+}
+
+// ── Status card update ────────────────────────────────────────
+function updateStatusCard() {
+  const s = gSt;
+  document.getElementById('sc-hostname').textContent = s.hostname + '.local';
+  document.getElementById('sc-ip').textContent       = s.ip || '—';
+  document.getElementById('sc-wifi').innerHTML       = wifiBarsHtml(s.wifi) + `<span style="font-size:11px;color:#999;margin-left:4px">${s.wifi} dBm</span>`;
+  document.getElementById('sc-room').textContent     = s.location || '—';
+  const acDot = s.power ? '#22c55e' : '#d1d5db';
+  document.getElementById('sc-ac').innerHTML = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${acDot};margin-right:5px;vertical-align:middle"></span>${s.power?'ON':'OFF'}`;
+  const mCls = s.matterStatus === 'commissioned' ? 'paired' : 'unpaired';
+  const mTxt = s.matterStatus === 'commissioned' ? 'Paired' : 'Not paired';
+  document.getElementById('sc-matter').innerHTML = `<span class="matter-dot ${mCls}"></span>${mTxt}`;
+  document.getElementById('fw-sub').textContent  = `ESP32 · fw ${s.firmware}`;
+  const dot = document.getElementById('serial-dot');
+  dot.className = 'serial-dot' + (s.hpConnected ? '' : ' offline');
+}
+
+// ── AC Tab ────────────────────────────────────────────────────
+function renderAcTab() {
+  const s = gSt;
+  const offOpacity = s.power ? 1 : 0.4;
+  const offPtr     = s.power ? 'auto' : 'none';
+  const noTemp     = !s.power || s.mode==='DRY' || s.mode==='FAN';
+
+  return `
+  <div>
+    <div class="ac-row" style="padding:0 0 8px">
+      <span class="ac-label">Power</span>
+      <button id="power-btn" class="power-toggle ${s.power?'on':'off'}" aria-label="Toggle power"></button>
+    </div>
+    <div class="ac-row" style="padding:8px 0 12px;opacity:${noTemp?0.4:1};pointer-events:${noTemp?'none':'auto'}">
+      <div style="display:flex;flex-direction:column;gap:3px">
+        <span class="ac-label">Temperature</span>
+        <span class="ac-label">${s.roomTemp>0?s.roomTemp.toFixed(1)+'°C':'—'}</span>
+      </div>
+      <div class="temp-control">
+        <button class="temp-btn" id="temp-dn" ${s.temp<=16?'disabled':''}>−</button>
+        <span class="temp-value" id="temp-val">${s.temp}<span>°C</span></span>
+        <button class="temp-btn" id="temp-up" ${s.temp>=31?'disabled':''}>+</button>
+      </div>
+    </div>
+    <div class="ac-row" style="flex-direction:column;align-items:flex-start;gap:10px;padding:8px 0;opacity:${offOpacity};pointer-events:${offPtr}">
+      <span class="ac-label">Mode</span>
+      <div class="icon-grid">
+        ${MODE_ORDER.map(m=>`<button class="icon-btn${s.mode===m?' active':''}" data-mode="${m}">${MODE_ICONS[m]}<span class="icon-label">${m}</span></button>`).join('')}
+      </div>
+    </div>
+    <div class="ac-row" style="flex-direction:column;align-items:flex-start;gap:10px;padding:8px 0 12px;opacity:${offOpacity};pointer-events:${offPtr}">
+      <span class="ac-label">Fan</span>
+      <div class="icon-grid">
+        ${FAN_ORDER.map(f=>`<button class="icon-btn${s.fan===f?' active':''}" data-fan="${f}">${fanBarsSvg(f)}<span class="icon-label">${FAN_LABELS[f]}</span></button>`).join('')}
+      </div>
+    </div>
+    <div class="ac-row" style="flex-direction:column;align-items:flex-start;gap:10px;padding:8px 0 0;border-bottom:none;opacity:${offOpacity};pointer-events:${offPtr}">
+      <span class="ac-label">Air Direction</span>
+      <div class="dir-grid">
+        ${VANE_ORDER.map(v=>`<button class="dir-btn${s.vane===v?' active':''}" data-vane="${v}">${vaneSvg(v)}<span class="dir-label">${v}</span></button>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindAcTab() {
+  document.getElementById('power-btn').onclick = () => sendAC({ power: !gSt.power });
+  document.getElementById('temp-dn').onclick   = () => sendAC({ temp: gSt.temp - 1 });
+  document.getElementById('temp-up').onclick   = () => sendAC({ temp: gSt.temp + 1 });
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => sendAC({ mode: b.dataset.mode }));
+  document.querySelectorAll('[data-fan]').forEach(b  => b.onclick = () => sendAC({ fan:  b.dataset.fan  }));
+  document.querySelectorAll('[data-vane]').forEach(b => b.onclick = () => sendAC({ vane: b.dataset.vane }));
+}
+
+async function sendAC(patch) {
+  const prev = { ...gSt };
+  Object.assign(gSt, patch);
+  renderTab();
+  try {
+    await apiPost('/api/state', patch);
+    showToast('Command sent');
+  } catch {
+    Object.assign(gSt, prev);
+    renderTab();
+    showToast('Command failed', 'error');
+  }
+}
+
+// ── Settings Tab ──────────────────────────────────────────────
+function renderSettingsTab() {
+  const s = gSettings;
+  const mqttOp = gMqttEnabled ? 1 : 0.4;
+  const mqttPt = gMqttEnabled ? 'auto' : 'none';
+  return `
+  <div>
+    <div class="settings-section">
+      <div class="section-heading">General</div>
+      <div class="field"><label>Hostname</label><input type="text" id="s-hostname" value="${s.hostname||''}" placeholder="esp-ac-01"></div>
+      <div class="field"><label>Room</label><input type="text" id="s-location" value="${s.location||''}" placeholder="e.g. Living Room"></div>
+      <div class="field"><label>Update Interval (seconds)</label><input type="number" id="s-interval" value="${s.updateInterval||1}" min="1" max="60"></div>
+    </div>
+    <div class="settings-section">
+      <div class="section-heading">WiFi</div>
+      <div class="field"><label>SSID</label><input type="text" id="s-ssid" value="${s.ssid||''}" placeholder="Network name"></div>
+      <div class="field"><label>Password</label><input type="password" id="s-wifipass" value="" placeholder="••••••••"></div>
+    </div>
+    <div class="settings-section">
+      <div class="section-heading">
+        <span>Matter</span>
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:${gMatterStatus.status==='commissioned'?'#16a34a':'#9ca3af'}">
+          <span style="width:7px;height:7px;border-radius:50%;background:${gMatterStatus.status==='commissioned'?'#22c55e':'#9ca3af'};display:inline-block"></span>
+          ${gMatterStatus.status==='commissioned'?'Paired':'Not paired'}
+        </span>
+      </div>
+      <div class="matter-box">
+        ${gMatterStatus.status==='commissioned'
+          ? `<div style="font-size:13px;color:#16a34a;font-weight:600;text-align:center">Device is commissioned and paired</div>
+             <button id="matter-decommission-btn" style="margin-top:8px;padding:8px 18px;border-radius:8px;border:1px solid #fecaca;background:#fff;color:#dc2626;font-size:12px;font-weight:600;cursor:pointer;outline:none">Remove from Matter</button>`
+          : `<div style="text-align:center">
+               <div style="font-size:11px;color:#8ea0b0;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Pairing Code</div>
+               <div style="font-size:28px;font-weight:700;letter-spacing:.08em;color:#1a1a1a;font-family:'SF Mono','Fira Code',monospace">${gMatterStatus.pairingCode||'—'}</div>
+               <div style="font-size:11px;color:#aaa;margin-top:10px">Open Apple Home, Google Home, or any Matter controller and add a new device. Enter the code above when prompted.</div>
+               ${gMatterStatus.qrUrl
+                 ? `<a href="${gMatterStatus.qrUrl}" target="_blank" style="display:inline-block;margin-top:10px;font-size:11px;color:#0077b6;text-decoration:none;border:1px solid #bde0f5;padding:4px 12px;border-radius:6px">Open QR Code ↗</a>`
+                 : ''}
+             </div>`
+        }
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="section-heading">
+        <span>MQTT</span>
+        <button id="mqtt-toggle" class="small-btn" style="border:1px solid ${gMqttEnabled?'#0077b6':'#c8d4e0'};background:${gMqttEnabled?'#e8f4fb':'#fff'};color:${gMqttEnabled?'#0077b6':'#4a5568'}">
+          <span style="width:7px;height:7px;border-radius:50%;display:inline-block;background:${gMqttEnabled?'#22c55e':'#ef4444'}"></span>
+          ${gMqttEnabled?'MQTT ON':'Enable MQTT'}
+        </button>
+      </div>
+      <div style="opacity:${mqttOp};pointer-events:${mqttPt};transition:opacity .2s">
+        <div class="field-row">
+          <div class="field"><label>Host</label><input type="text" id="s-mqtthost" value="${s.mqttHost||''}" placeholder="192.168.1.10"></div>
+          <div class="field"><label>Port</label><input type="number" id="s-mqttport" value="${s.mqttPort||1883}" placeholder="1883"></div>
+        </div>
+        <div class="field"><label>Username</label><input type="text" id="s-mqttuser" value="${s.mqttLogin||''}" placeholder="mqtt user"></div>
+        <div class="field"><label>Password</label><input type="password" id="s-mqttpass" value="" placeholder="••••••••"></div>
+      </div>
+    </div>
+    <button class="btn-save" id="save-btn">Save Settings</button>
+    <button class="btn-reset" id="reset-btn">Reset All Settings</button>
+    <button id="reboot-btn" style="width:100%;margin-top:8px;padding:12px;border-radius:8px;background:#fff;color:#9a3412;border:1px solid #fed7aa;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;outline:none;display:flex;align-items:center;justify-content:center;gap:7px">
+      ${ICO.reboot} Reboot Device
+    </button>
+  </div>`;
+}
+
+function bindSettingsTab() {
+  document.getElementById('mqtt-toggle').onclick = () => {
+    gMqttEnabled = !gMqttEnabled;
+    renderTab();
+  };
+
+  document.getElementById('save-btn').onclick = async () => {
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const payload = {
+      hostname:       document.getElementById('s-hostname').value,
+      location:       document.getElementById('s-location').value,
+      updateInterval: parseInt(document.getElementById('s-interval').value)||1,
+      ssid:           document.getElementById('s-ssid').value,
+      wifiPassword:   document.getElementById('s-wifipass').value,
+      mqttEnabled:    gMqttEnabled,
+      mqttHost:       document.getElementById('s-mqtthost').value,
+      mqttPort:       parseInt(document.getElementById('s-mqttport').value)||1883,
+      mqttLogin:      document.getElementById('s-mqttuser').value,
+      mqttPassword:   document.getElementById('s-mqttpass').value
+    };
+    try {
+      await apiPost('/api/settings', payload);
+      showToast('Saved — rebooting…');
+    } catch { showToast('Save failed', 'error'); btn.disabled=false; btn.textContent='Save Settings'; }
+  };
+
+  document.getElementById('reset-btn').onclick = () => {
+    if (confirm('Reset all settings to factory defaults?')) showToast('Reset initiated…');
+  };
+
+  document.getElementById('reboot-btn').onclick = () => {
+    if (!gRebootConfirm) {
+      gRebootConfirm = true;
+      document.getElementById('reboot-btn').innerHTML = ICO.reboot + ' Tap again to confirm reboot';
+      document.getElementById('reboot-btn').style.background = '#7f1d1d';
+      document.getElementById('reboot-btn').style.color = '#fff';
+      clearTimeout(gRebootTimer);
+      gRebootTimer = setTimeout(() => {
+        gRebootConfirm = false;
+        document.getElementById('reboot-btn').innerHTML = ICO.reboot + ' Reboot Device';
+        document.getElementById('reboot-btn').style.background = '#fff';
+        document.getElementById('reboot-btn').style.color = '#9a3412';
+      }, 3000);
+    } else {
+      apiPost('/api/reboot', {}).catch(()=>{});
+      showToast('Rebooting…');
+    }
+  };
+  const decommBtn = document.getElementById('matter-decommission-btn');
+  if (decommBtn) {
+    decommBtn.onclick = async () => {
+      if (confirm('Remove this device from all Matter controllers?')) {
+        await apiPost('/api/matter/decommission', {}).catch(() => {});
+        showToast('Matter reset — rebooting…');
+      }
+    };
+  }
+}
+
+// ── Logs Tab ──────────────────────────────────────────────────
+function renderLogsTab() {
+  const filtered = gFilter==='ALL' ? gLogs : gLogs.filter(l=>l.lvl===gFilter.toLowerCase());
+  const wsDot    = gWs && gWs.readyState===1 ? 'connected' : 'disconnected';
+  const wsLabel  = gWs && gWs.readyState===1 ? 'Live via WebSocket' : 'Disconnected';
+  return `
+  <div>
+    <div class="log-toolbar">
+      <div class="log-filters">
+        ${['ALL','INFO','WARN','ERROR'].map(f=>`<button class="log-filter-btn${gFilter===f?' active-'+f.toLowerCase():''}" data-filter="${f}">${f}</button>`).join('')}
+      </div>
+      <div class="log-actions">
+        <button class="log-action-btn${gAutoScroll?' scroll-on':''}" id="scroll-btn">SCROLL ${gAutoScroll?'ON':'OFF'}</button>
+        <button class="log-action-btn" id="clear-btn">CLEAR</button>
+      </div>
+    </div>
+    <div class="log-table-wrap" id="log-wrap">
+      <table class="log-table">
+        <thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead>
+        <tbody id="log-body">
+          ${filtered.length===0
+            ? '<tr><td colspan="3" class="log-empty">No log entries</td></tr>'
+            : filtered.map(l=>`<tr><td class="log-td-time">${l.t}</td><td class="log-td-level">${levelBadge(l.lvl)}</td><td class="log-td-msg">${l.msg}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="log-footer">
+      <span class="ws-dot ${wsDot}"></span>
+      ${filtered.length} entr${filtered.length===1?'y':'ies'} · ${wsLabel}
+    </div>
+  </div>`;
+}
+
+function bindLogsTab() {
+  document.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => { gFilter = b.dataset.filter; renderTab(); });
+  document.getElementById('scroll-btn').onclick = () => { gAutoScroll=!gAutoScroll; renderTab(); };
+  document.getElementById('clear-btn').onclick  = () => { gLogs=[]; renderTab(); };
+  if (gAutoScroll) {
+    const wrap = document.getElementById('log-wrap');
+    if (wrap) wrap.scrollTop = wrap.scrollHeight;
+  }
+}
+
+// ── Tab switching ─────────────────────────────────────────────
+function renderTab() {
+  const content = document.getElementById('tab-content');
+  if (gTab==='ac')           { content.className='card'; content.innerHTML=renderAcTab();       bindAcTab(); }
+  else if (gTab==='settings') { content.className='card'; content.innerHTML=renderSettingsTab(); bindSettingsTab(); }
+  else                        { content.className='card logs-card'; content.innerHTML=renderLogsTab(); bindLogsTab(); }
+}
+
+function switchTab(tab) {
+  gTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab===tab));
+  if (tab==='settings') {
+    const fetches = [fetch('/api/matter/status').then(r=>r.json()).then(d=>{ gMatterStatus=d; }).catch(()=>{})];
+    if (!gSettingsLoaded) {
+      fetches.push(fetch('/api/settings').then(r=>r.json()).then(d=>{
+        gSettings = d;
+        gMqttEnabled = d.mqttEnabled;
+        gSettingsLoaded = true;
+      }));
+    }
+    Promise.all(fetches).then(() => renderTab());
+  } else {
+    renderTab();
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────
+function connectWs() {
+  const url = `ws://${location.host}/ws`;
+  gWs = new WebSocket(url);
+
+  gWs.onopen = () => {
+    gWsDelay = 1000;
+    if (gTab==='logs') renderTab();
+  };
+
+  gWs.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+
+    if (msg.type==='log') {
+      gLogs.push({ t:msg.t, lvl:msg.lvl, msg:msg.msg });
+      if (gLogs.length > 200) gLogs.shift();
+      if (gTab==='logs') {
+        const body = document.getElementById('log-body');
+        const wrap = document.getElementById('log-wrap');
+        if (body && (gFilter==='ALL' || msg.lvl===gFilter.toLowerCase())) {
+          if (body.querySelector('td[colspan]')) body.innerHTML='';
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="log-td-time">${msg.t}</td><td class="log-td-level">${levelBadge(msg.lvl)}</td><td class="log-td-msg">${msg.msg}</td>`;
+          body.appendChild(tr);
+          if (gAutoScroll && wrap) wrap.scrollTop = wrap.scrollHeight;
+          const footer = wrap.nextElementSibling;
+          if (footer) {
+            const cnt = document.querySelectorAll('#log-body tr').length;
+            footer.innerHTML = `<span class="ws-dot connected"></span>${cnt} entr${cnt===1?'y':'ies'} · Live via WebSocket`;
+          }
+        }
+      }
+    }
+
+    if (msg.type==='state') {
+      Object.assign(gSt, msg);
+      updateStatusCard();
+      if (gTab==='ac') renderTab();
+    }
+  };
+
+  gWs.onclose = () => {
+    if (gTab==='logs') renderTab();
+    gWsTimer = setTimeout(() => { gWsDelay = Math.min(gWsDelay*2, 30000); connectWs(); }, gWsDelay);
+  };
+}
+
+// ── Init ──────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('root').innerHTML = `
+    <div class="app-header">
+      <span class="serial-dot" id="serial-dot"></span>
+      <span class="app-header-title">AC Controller</span>
+      <span class="app-header-sub" id="fw-sub">ESP32</span>
+    </div>
+    <div class="status-card" id="status-card">
+      <div class="status-grid">
+        <div class="status-item"><span class="status-label">Hostname</span><span class="status-value" id="sc-hostname">—</span></div>
+        <div class="status-item"><span class="status-label">IP Address</span><span class="status-value" id="sc-ip">—</span></div>
+        <div class="status-item"><span class="status-label">WiFi</span><span class="status-value" id="sc-wifi">—</span></div>
+        <div class="status-item"><span class="status-label">Room</span><span class="status-value" id="sc-room">—</span></div>
+        <div class="status-item"><span class="status-label">AC Unit</span><span class="status-value" id="sc-ac">—</span></div>
+        <div class="status-item"><span class="status-label">Matter</span><span class="status-value" id="sc-matter">—</span></div>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="ac">AC Control</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+      <button class="tab-btn" data-tab="logs">Logs</button>
+    </div>
+    <div class="card" id="tab-content"></div>
+    <div id="toast" class="api-toast ok" style="display:none"></div>
+  `;
+
+  document.querySelectorAll('.tab-btn').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+  fetch('/api/state')
+    .then(r => r.json())
+    .then(d => { Object.assign(gSt, d); updateStatusCard(); renderTab(); })
+    .catch(() => renderTab());
+
+  connectWs();
+  renderTab();
+});
+</script>
+</body>
+</html>
