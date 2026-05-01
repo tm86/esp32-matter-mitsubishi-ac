@@ -31,7 +31,7 @@ static void serializeState(JsonDocument &doc) {
                           : WiFi.softAPIP().toString();
     doc["wifi"]         = WiFi.status() == WL_CONNECTED ? (int)WiFi.RSSI() : 0;
     doc["location"]     = sSettings->location;
-    doc["firmware"]     = "1.0.0";
+    doc["firmware"]     = FIRMWARE_VERSION;
     doc["matterStatus"] = Matter.isDeviceCommissioned() ? "commissioned" : "not_commissioned";
 }
 
