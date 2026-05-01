@@ -319,6 +319,9 @@ function renderSettingsTab() {
       <div class="field"><label>Hostname</label><input type="text" id="s-hostname" value="${s.hostname||''}" placeholder="esp-ac-01"></div>
       <div class="field"><label>Room</label><input type="text" id="s-location" value="${s.location||''}" placeholder="e.g. Living Room"></div>
       <div class="field"><label>Update Interval (seconds)</label><input type="number" id="s-interval" value="${s.updateInterval||1}" min="1" max="60"></div>
+      <div class="field"><label>NTP Server</label><input type="text" id="s-ntpserver" value="${s.ntpServer||'pool.ntp.org'}" placeholder="pool.ntp.org"></div>
+      <div class="field"><label>Timezone (POSIX)</label><input type="text" id="s-ntptz" value="${s.ntpTimezone||'UTC0'}" placeholder="e.g. UTC0, CET-1, EST5EDT,M3.2.0,M11.1.0"></div>
+      <div class="field"><label>NTP Refresh (hours)</label><input type="number" id="s-ntprefresh" value="${s.ntpRefreshHours||1}" min="1" max="168"></div>
     </div>
     <div class="settings-section">
       <div class="section-heading">WiFi</div>
@@ -391,8 +394,11 @@ function bindSettingsTab() {
       mqttEnabled:    gMqttEnabled,
       mqttHost:       document.getElementById('s-mqtthost').value,
       mqttPort:       parseInt(document.getElementById('s-mqttport').value)||1883,
-      mqttLogin:      document.getElementById('s-mqttuser').value,
-      mqttPassword:   document.getElementById('s-mqttpass').value
+      mqttLogin:       document.getElementById('s-mqttuser').value,
+      mqttPassword:    document.getElementById('s-mqttpass').value,
+      ntpServer:       document.getElementById('s-ntpserver').value,
+      ntpTimezone:     document.getElementById('s-ntptz').value,
+      ntpRefreshHours: parseInt(document.getElementById('s-ntprefresh').value)||1,
     };
     try {
       await apiPost('/api/settings', payload);
