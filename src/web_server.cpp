@@ -143,6 +143,9 @@ static void setupRoutes() {
         doc["mqttHaDisc"]     = sSettings->mqttHaDisc;
         doc["apEnabled"]      = sSettings->apEnabled;
         doc["apSsid"]         = sSettings->apSsid;
+        doc["ntpServer"]       = sSettings->ntpServer;
+        doc["ntpTimezone"]     = sSettings->ntpTimezone;
+        doc["ntpRefreshHours"] = sSettings->ntpRefreshHours;
         String out;
         serializeJson(doc, out);
         req->send(200, "application/json", out);
@@ -182,6 +185,12 @@ static void setupRoutes() {
             if (doc["mqttHaDisc"].is<bool>())        sSettings->mqttHaDisc = doc["mqttHaDisc"];
             if (doc["apEnabled"].is<bool>())         sSettings->apEnabled  = doc["apEnabled"];
             if (doc["apSsid"].is<const char*>())     sSettings->apSsid     = doc["apSsid"].as<String>();
+            if (doc["ntpServer"].is<const char*>())
+                sSettings->ntpServer   = doc["ntpServer"].as<String>();
+            if (doc["ntpTimezone"].is<const char*>())
+                sSettings->ntpTimezone = doc["ntpTimezone"].as<String>();
+            if (doc["ntpRefreshHours"].is<int>())
+                sSettings->ntpRefreshHours = doc["ntpRefreshHours"];
 
             settingsSave(*sSettings);
             req->send(200, "application/json", R"({"ok":true,"reboot":true})");
