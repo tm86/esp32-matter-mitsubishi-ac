@@ -1,6 +1,8 @@
 #include "wifi_manager.h"
 #include "build_defaults.generated.h"
 #include <WiFi.h>
+#include <time.h>
+#include <esp_sntp.h>
 
 void wifiConnect(const Settings &s) {
     Serial.printf("[WiFi] Connecting to '%s'\n", s.wifiSsid.c_str());
@@ -18,6 +20,10 @@ void wifiConnect(const Settings &s) {
 
     if (WiFi.status() == WL_CONNECTED) {
         Serial.printf("[WiFi] Connected. IP: %s\n", WiFi.localIP().toString().c_str());
+        esp_sntp_set_sync_interval((uint32_t)s.ntpRefreshHours * 3600000UL);
+        configTzTime(s.ntpTimezone.c_str(), s.ntpServer.c_str());
+        Serial.printf("[NTP] Syncing with %s (tz=%s, refresh=%dh)\n",
+                      s.ntpServer.c_str(), s.ntpTimezone.c_str(), s.ntpRefreshHours);
         return;
     }
 
