@@ -17,6 +17,9 @@ struct Settings {
     bool   mqttHaDisc;
     bool   apEnabled;
     String apSsid;
+    String ntpServer;
+    String ntpTimezone;
+    int    ntpRefreshHours;
 };
 
 void settingsLoad(Settings &s);
