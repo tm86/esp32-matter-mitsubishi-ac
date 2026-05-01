@@ -2,6 +2,8 @@
 #include "ac_state.h"
 #include <HeatPump.h>
 #include <Arduino.h>
+#include <time.h>
+#include <math.h>
 
 std::deque<LogEntry> gLogBuffer;
 SemaphoreHandle_t    gLogMutex    = nullptr;
@@ -13,9 +15,15 @@ static LogCb          sOnLog;
 static int            sIntervalSec = 1;
 
 void hpLog(const String &lvl, const String &msg) {
-    unsigned long s = millis() / 1000;
     char t[9];
-    snprintf(t, sizeof(t), "%02lu:%02lu:%02lu", (s / 3600) % 24, (s / 60) % 60, s % 60);
+    time_t now = time(nullptr);
+    if (now > 1000000000L) {
+        struct tm *ti = localtime(&now);
+        strftime(t, sizeof(t), "%H:%M:%S", ti);
+    } else {
+        unsigned long s = millis() / 1000;
+        snprintf(t, sizeof(t), "%02lu:%02lu:%02lu", (s / 3600) % 24, (s / 60) % 60, s % 60);
+    }
     LogEntry e{t, lvl, msg};
 
     if (xSemaphoreTake(gLogMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
