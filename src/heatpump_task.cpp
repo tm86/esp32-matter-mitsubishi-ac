@@ -14,6 +14,14 @@ static StateChangedCb sOnState;
 static LogCb          sOnLog;
 static int            sIntervalSec = 1;
 
+static char  sPrevPower[4]  = "";
+static float sPrevTemp      = -999.0f;
+static char  sPrevMode[8]   = "";
+static char  sPrevFan[8]    = "";
+static char  sPrevVane[8]   = "";
+static float sPrevRoomTemp  = -999.0f;
+static bool  sPrevOperating = false;
+
 void hpLog(const String &lvl, const String &msg) {
     char t[9];
     time_t now = time(nullptr);
@@ -38,6 +46,13 @@ void hpLog(const String &lvl, const String &msg) {
 // HeatPump library uses no-arg callbacks; read back from sHp after firing
 static void onSettingsChanged() {
     heatpumpSettings s = sHp.getSettings();
+
+    bool changed = (strcmp(s.power, sPrevPower) != 0 ||
+                    s.temperature != sPrevTemp          ||
+                    strcmp(s.mode, sPrevMode)   != 0   ||
+                    strcmp(s.fan,  sPrevFan)    != 0   ||
+                    strcmp(s.vane, sPrevVane)   != 0);
+
     if (xSemaphoreTake(gAcStateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         gAcState.power = (strcmp(s.power, "ON") == 0);
         gAcState.temp  = s.temperature;
@@ -46,6 +61,15 @@ static void onSettingsChanged() {
         gAcState.vane  = s.vane;
         xSemaphoreGive(gAcStateMutex);
     }
+
+    if (!changed) return;
+
+    strlcpy(sPrevPower, s.power,  sizeof(sPrevPower));
+    sPrevTemp = s.temperature;
+    strlcpy(sPrevMode,  s.mode,   sizeof(sPrevMode));
+    strlcpy(sPrevFan,   s.fan,    sizeof(sPrevFan));
+    strlcpy(sPrevVane,  s.vane,   sizeof(sPrevVane));
+
     char buf[96];
     snprintf(buf, sizeof(buf), "AC settings: pwr=%s temp=%.1f mode=%s fan=%s vane=%s",
              s.power, s.temperature, s.mode, s.fan, s.vane);
@@ -54,10 +78,19 @@ static void onSettingsChanged() {
 }
 
 static void onStatusChanged(heatpumpStatus s) {
+    bool changed = (fabsf(s.roomTemperature - sPrevRoomTemp) >= 0.1f ||
+                    s.operating != sPrevOperating);
+
     if (xSemaphoreTake(gAcStateMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         gAcState.roomTemp = s.roomTemperature;
         xSemaphoreGive(gAcStateMutex);
     }
+
+    if (!changed) return;
+
+    sPrevRoomTemp  = s.roomTemperature;
+    sPrevOperating = s.operating;
+
     char buf[48];
     snprintf(buf, sizeof(buf), "AC status: roomTemp=%.1f°C operating=%s",
              s.roomTemperature, s.operating ? "yes" : "no");
