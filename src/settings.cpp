@@ -21,6 +21,9 @@ void settingsLoad(Settings &s) {
     s.mqttHaDisc     = prefs.getBool(  "mqtt_ha_disc", false);
     s.apEnabled      = prefs.getBool(  "ap_enabled",  BUILD_DEFAULT_WEB_AP_FALLBACK_ENABLED);
     s.apSsid         = prefs.getString("ap_ssid",     BUILD_DEFAULT_WEB_AP_SSID);
+    s.ntpServer       = prefs.getString("ntp_server",  BUILD_DEFAULT_NTP_SERVER);
+    s.ntpTimezone     = prefs.getString("ntp_tz",       BUILD_DEFAULT_NTP_TIMEZONE);
+    s.ntpRefreshHours = prefs.getInt(   "ntp_refresh",  BUILD_DEFAULT_NTP_REFRESH_HOURS);
     prefs.end();
 }
 
@@ -41,5 +44,8 @@ void settingsSave(const Settings &s) {
     prefs.putBool(  "mqtt_ha_disc", s.mqttHaDisc);
     prefs.putBool(  "ap_enabled",  s.apEnabled);
     prefs.putString("ap_ssid",     s.apSsid);
+    prefs.putString("ntp_server",  s.ntpServer);
+    prefs.putString("ntp_tz",      s.ntpTimezone);
+    prefs.putInt(   "ntp_refresh", s.ntpRefreshHours);
     prefs.end();
 }

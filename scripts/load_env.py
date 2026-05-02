@@ -51,6 +51,9 @@ defaults = {
     "WEB_AP_SSID": "esp32-ac-setup",
     "WIFI_CONNECT_TIMEOUT_SECONDS": "20",
     "LOCATION": "",
+    "NTP_SERVER":        "pool.ntp.org",
+    "NTP_TIMEZONE":      "UTC0",
+    "NTP_REFRESH_HOURS": "1",
 }
 defaults.update(values)
 
@@ -74,6 +77,9 @@ generated_path.write_text(
             f"#define BUILD_DEFAULT_WEB_AP_SSID {string_literal(defaults['WEB_AP_SSID'])}",
             f"#define BUILD_DEFAULT_WIFI_CONNECT_TIMEOUT_SECONDS {int(defaults['WIFI_CONNECT_TIMEOUT_SECONDS'])}",
             f"#define BUILD_DEFAULT_LOCATION {string_literal(defaults['LOCATION'])}",
+            f"#define BUILD_DEFAULT_NTP_SERVER {string_literal(defaults['NTP_SERVER'])}",
+            f"#define BUILD_DEFAULT_NTP_TIMEZONE {string_literal(defaults['NTP_TIMEZONE'])}",
+            f"#define BUILD_DEFAULT_NTP_REFRESH_HOURS {int(defaults['NTP_REFRESH_HOURS'])}",
             "",
         ]
     ),
